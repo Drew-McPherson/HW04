@@ -7,14 +7,22 @@ ui <- fluidPage(
   titlePanel("HW04 Shiny App"),
   sidebarLayout(
     sidebarPanel(
+
+# collect the overall variable input
       selectInput("vars", "Variables:", 
                   choices = names(mtcars), 
                   selected = c("mpg", "cyl"), multiple = TRUE),
+
+# Collect the discrete variable input
       selectInput("discrete_var", "Select discrete variable:", 
                   choices = c("cyl", "vs", "am", "gear", "carb")),
+
+# Collect the continuous variable input
       selectInput("continuous_var", "Select continuous variable:", 
-                  choices = names(mtcars)[sapply(mtcars, is.numeric)])
+                  choices = c("mpg", "disp", "hp", "drat", "wt", "qsec"))
     ),
+
+# Create tabs
     mainPanel(
       tabsetPanel(
         tabPanel("Data", 
@@ -43,10 +51,17 @@ server <- function(input, output, session) {
   })
   
   output$summary_text <- renderPrint({
-    df <- selected_data()
+    vars_to_use <- unique(c(input$vars, input$discrete_var))
+    df <- mtcars %>% select(any_of(vars_to_use))
+    
+    # Coerce the discrete variable to factor if it's present
+    if (input$discrete_var %in% names(df)) {
+      df[[input$discrete_var]] <- as.factor(df[[input$discrete_var]])
+    }
+    
     list(
       Continuous = summary(df[sapply(df, is.numeric)]),
-      Discrete = summary(df[sapply(df, function(x) is.factor(x) || is.integer(x))])
+      Discrete = summary(df[sapply(df, is.factor)])
     )
   })
   
