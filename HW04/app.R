@@ -7,34 +7,19 @@ ui <- fluidPage(
   titlePanel("HW04 Shiny App"),
   sidebarLayout(
     sidebarPanel(
-
-# collect the overall variable input
+      # User selects any variables
       selectInput("vars", "Variables:", 
                   choices = names(mtcars), 
-                  selected = c("mpg", "cyl"), multiple = TRUE),
-
-# Collect the discrete variable input
-      selectInput("discrete_var", "Select discrete variable:", 
-                  choices = c("cyl", "vs", "am", "gear", "carb")),
-
-# Collect the continuous variable input
-      selectInput("continuous_var", "Select continuous variable:", 
-                  choices = c("mpg", "disp", "hp", "drat", "wt", "qsec"))
+                  selected = c("mpg", "cyl"), multiple = TRUE)
     ),
-
-# Create tabs
+    
     mainPanel(
       tabsetPanel(
-        tabPanel("Data", 
-                 tableOutput("data_table")),
-        tabPanel("Summary", 
-                 verbatimTextOutput("summary_text")),
-        tabPanel("BoxPlot", 
-                 plotOutput("box_plot")),
-        tabPanel("Bar", 
-                 plotOutput("bar_plot")),
-        tabPanel("Histogram", 
-                 plotOutput("hist_plot"))
+        tabPanel("Data", tableOutput("data_table")),
+        tabPanel("Summary", verbatimTextOutput("summary_text")),
+        tabPanel("BoxPlot", plotOutput("box_plot")),
+        tabPanel("Bar", plotOutput("bar_plot")),
+        tabPanel("Histogram", plotOutput("hist_plot"))
       )
     )
   )
@@ -46,17 +31,25 @@ server <- function(input, output, session) {
     mtcars %>% select(all_of(input$vars))
   })
   
+  # Automatically classify variables
+  variable_types <- reactive({
+    df <- selected_data()
+    discrete_vars <- names(df)[sapply(df, function(x) is.numeric(x) && n_distinct(x) <= 10)]
+    continuous_vars <- names(df)[sapply(df, function(x) is.numeric(x) && n_distinct(x) > 10)]
+    
+    list(discrete = discrete_vars, continuous = continuous_vars)
+  })
+  
   output$data_table <- renderTable({
     selected_data()
   })
   
   output$summary_text <- renderPrint({
-    vars_to_use <- unique(c(input$vars, input$discrete_var))
-    df <- mtcars %>% select(any_of(vars_to_use))
+    df <- selected_data()
     
-    # Coerce the discrete variable to factor if it's present
-    if (input$discrete_var %in% names(df)) {
-      df[[input$discrete_var]] <- as.factor(df[[input$discrete_var]])
+    # Coerce discrete variables to factors
+    for (var in variable_types()$discrete) {
+      df[[var]] <- as.factor(df[[var]])
     }
     
     list(
@@ -66,25 +59,31 @@ server <- function(input, output, session) {
   })
   
   output$box_plot <- renderPlot({
-    req(input$discrete_var, input$continuous_var)
-    ggplot(mtcars, aes_string(x = input$discrete_var, y = input$continuous_var)) +
+    types <- variable_types()
+    req(length(types$discrete) > 0, length(types$continuous) > 0)
+    
+    ggplot(mtcars, aes_string(x = types$discrete[1], y = types$continuous[1])) +
       geom_boxplot(fill = "skyblue") +
-      labs(title = paste("Boxplot of", input$continuous_var, "by", input$discrete_var),
-           x = input$discrete_var, y = input$continuous_var)
+      labs(title = paste("Boxplot of", types$continuous[1], "by", types$discrete[1]),
+           x = types$discrete[1], y = types$continuous[1])
   })
   
   output$bar_plot <- renderPlot({
-    req(input$discrete_var)
-    ggplot(mtcars, aes_string(x = input$discrete_var)) +
+    types <- variable_types()
+    req(length(types$discrete) > 0)
+    
+    ggplot(mtcars, aes_string(x = types$discrete[1])) +
       geom_bar(fill = "coral") +
-      labs(title = paste("Barplot of", input$discrete_var), x = input$discrete_var, y = "Count")
+      labs(title = paste("Barplot of", types$discrete[1]), x = types$discrete[1], y = "Count")
   })
   
   output$hist_plot <- renderPlot({
-    req(input$continuous_var)
-    ggplot(mtcars, aes_string(x = input$continuous_var)) +
+    types <- variable_types()
+    req(length(types$continuous) > 0)
+    
+    ggplot(mtcars, aes_string(x = types$continuous[1])) +
       geom_histogram(binwidth = 2, fill = "lightgreen", color = "black") +
-      labs(title = paste("Histogram of", input$continuous_var), x = input$continuous_var, y = "Frequency")
+      labs(title = paste("Histogram of", types$continuous[1]), x = types$continuous[1], y = "Frequency")
   })
 }
 
